@@ -19,3 +19,39 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class Organization(BaseModel):
+    name: str
+    category: str
+    description: Optional[str] = None
+    address: Optional[str] = None
+    owner_id: int
+
+
+class OrganizationCreate(BaseModel):
+    name: str
+    category: str
+    description: Optional[str] = None
+    address: Optional[str] = None
+
+class OrganizationResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: Optional[str] = None
+    address: Optional[str] = None
+    owner_id: int
+
+    class Config:
+        orm_mode = True
+
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+    
