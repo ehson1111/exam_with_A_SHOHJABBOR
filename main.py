@@ -88,18 +88,29 @@ async def create_organization(name: str, category: str, description: str, addres
     db.refresh(organization)
     return organization
 
-@app.get('/organizations/', response_model=List[OrganizationResponse])
-async def get_organizations(db: Session = Depends(get_db)):
-    organizations = db.query(Organization).all()
-    return organizations
 
 
-@app.get('/organizations/{organization_id}/', response_model=OrganizationResponse)
-async def get_organization(organization_id: int, db: Session = Depends(get_db)):
-    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+
+@app.post("create-branch/")
+async def create_branch(name: str, address: str, schedule: dict, organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if not current_user.is_organization:
+        raise HTTPException(status_code=403, detail="User is not an organization")
+    
+    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.owner_id == current_user.id).first()
     if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    return organization
+        raise HTTPException(status_code=404, detail="Organization not found or user is not the owner")
+    
+    branch = Branch(
+        name=name,
+        address=address,
+        schedule=schedule,
+        organization_id=organization_id
+    )
+    db.add(branch)
+    db.commit()
+    db.refresh(branch)
+    return branch
+
 
 
 @app.post("create-queue-slot/")
@@ -124,3 +135,103 @@ async def get_queue_slots(db: Session = Depends(get_db)):
 
 
 
+@app.get("/branches/", response_model=List[Branch])
+async def get_branches(db: Session = Depends(get_db)):
+    branches = db.query(Branch).all()
+    return branches
+
+
+@app.get('/organizations/', response_model=List[OrganizationResponse])
+async def get_organizations(db: Session = Depends(get_db)):
+    organizations = db.query(Organization).all()
+    return organizations
+
+
+@app.get('/organizations/{organization_id}/', response_model=OrganizationResponse)
+async def get_organization(organization_id: int, db: Session = Depends(get_db)):
+    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return organization
+
+
+@app.get('/users/', response_model=List[UserResponse])
+async def get_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return users
+
+@app.get('/users/{user_id}/', response_model=UserResponse)
+async def get_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@app.patch('quick-queue-slot/{slot_id}/')
+async def update_queue_slot(slot_id: int, status: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    queue_slot = db.query(QueueSlot).filter(QueueSlot.id == slot_id, QueueSlot.user_id == current_user.id).first()
+    if not queue_slot:
+        raise HTTPException(status_code=404, detail="Queue slot not found or user is not the owner")
+    
+    queue_slot.status = status
+    db.commit()
+    db.refresh(queue_slot)
+    return queue_slot
+
+@app.patch('quick-branch/{branch_id}/')
+async def update_branch(branch_id: int, name: str, address: str, schedule: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    branch = db.query(Branch).filter(Branch.id == branch_id, Branch.organization_id == current_user.id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found or user is not the owner")
+    
+    branch.name = name
+    branch.address = address
+    branch.schedule = schedule
+    db.commit()
+    db.refresh(branch)
+    return branch
+
+@app.patch('quick-organization/{organization_id}/')
+async def update_organization(organization_id: int, name: str, category: str, description: str, address: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.owner_id == current_user.id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found or user is not the owner")
+    
+    organization.name = name
+    organization.category = category
+    organization.description = description
+    organization.address = address
+    db.commit()
+    db.refresh(organization)
+    return organization
+
+@app.delete('quick-queue-slot/{slot_id}/')
+async def delete_queue_slot(slot_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    queue_slot = db.query(QueueSlot).filter(QueueSlot.id == slot_id, QueueSlot.user_id == current_user.id).first()
+    if not queue_slot:
+        raise HTTPException(status_code=404, detail="Queue slot not found or user is not the owner")
+    
+    db.delete(queue_slot)
+    db.commit()
+    return {"message": "Queue slot deleted successfully"}
+
+@app.delete('quick-branch/{branch_id}/')
+async def delete_branch(branch_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    branch = db.query(Branch).filter(Branch.id == branch_id, Branch.organization_id == current_user.id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found or user is not the owner")
+    
+    db.delete(branch)
+    db.commit()
+    return {"message": "Branch deleted successfully"}
+
+@app.delete('quick-organization/{organization_id}/')
+async def delete_organization(organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.owner_id == current_user.id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found or user is not the owner")
+    
+    db.delete(organization)
+    db.commit()
+    return {"message": "Organization deleted successfully"}
