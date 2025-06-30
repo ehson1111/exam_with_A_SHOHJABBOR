@@ -1,15 +1,13 @@
-from sqlalchemy import  Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
 from database import Base
-
-
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    password = Column(String, nullable=False)
+    full_name = Column(String)
+    email = Column(String, unique=True, index=True)
+    password = Column(String)
     is_verified = Column(Boolean, default=False)
     is_organization = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -17,10 +15,10 @@ class User(Base):
 class Organization(Base):
     __tablename__ = "organizations"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    category = Column(String, nullable=False)
+    name = Column(String)
+    category = Column(String)
     description = Column(String)
-    address = Column(String, nullable=False)
+    address = Column(String)
     owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -28,8 +26,8 @@ class Branch(Base):
     __tablename__ = "branches"
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"))
-    name = Column(String, nullable=False)
-    address = Column(String, nullable=False)
+    name = Column(String)
+    address = Column(String)
     schedule = Column(JSON)
 
 class QueueSlot(Base):
@@ -37,5 +35,6 @@ class QueueSlot(Base):
     id = Column(Integer, primary_key=True, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    date = Column(DateTime, nullable=False)
-    status = Column(String, default="booked")  
+    date = Column(DateTime)
+    time = Column(String)
+    status = Column(String)  
