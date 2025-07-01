@@ -243,3 +243,19 @@ async def delete_organization(organization_id: int, db: Session = Depends(get_db
     db.delete(organization)
     db.commit()
     return {"message": "Organization deleted successfully"}
+
+
+@app.post("/users/{user_id}/make-organization/")
+async def make_organization(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if current_user.id != user.id:
+        raise HTTPException(status_code=403, detail="You can only make your own account an organization")
+    
+    user.is_organization = True
+    db.commit()
+    db.refresh(user)
+    return {"message": "User is now an organization", "user": user}
+
