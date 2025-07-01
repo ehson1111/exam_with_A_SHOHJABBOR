@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict, Any
+from datetime import datetime
 
 class UserCreate(BaseModel):
     full_name: str
@@ -14,19 +15,11 @@ class UserResponse(BaseModel):
     is_organization: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True  
 
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-class Organization(BaseModel):
-    name: str
-    category: str
-    description: Optional[str] = None
-    address: Optional[str] = None
-    owner_id: int
-
 
 class OrganizationCreate(BaseModel):
     name: str
@@ -43,15 +36,42 @@ class OrganizationResponse(BaseModel):
     owner_id: int
 
     class Config:
-        orm_mode = True
-
-
+        from_attributes = True  
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 
-
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
-    
+
+class QueueSlotBase(BaseModel):
+    branch_id: int
+    user_id: int
+    date: datetime  # Changed to datetime to match SQLAlchemy model
+    time: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+class QueueSlotCreate(QueueSlotBase):
+    pass
+
+class QueueSlot(QueueSlotBase):
+    id: int
+
+class BranchBase(BaseModel):
+    name: str
+    address: str
+    schedule: Dict[str, Any]
+    organization_id: int
+
+    class Config:
+        from_attributes = True
+
+class BranchCreate(BranchBase):
+    pass
+
+class Branch(BranchBase):
+    id: int

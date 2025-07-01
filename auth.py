@@ -9,7 +9,6 @@ from database import get_db
 from schemas import UserResponse
 import secrets
 
-
 SECRET_KEY = secrets.token_hex(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -72,35 +71,3 @@ async def verify_reset_token(token: str, db: Session = Depends(get_db)):
     if user is None:
         raise credentials_exception
     return user
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

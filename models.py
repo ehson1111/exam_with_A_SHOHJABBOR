@@ -37,4 +37,4 @@ class QueueSlot(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     date = Column(DateTime)
     time = Column(String)
-    status = Column(String)  
+    status = Column(String)
