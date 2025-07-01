@@ -4,6 +4,7 @@ from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String)
     email = Column(String, unique=True, index=True)
@@ -14,6 +15,7 @@ class User(Base):
 
 class Organization(Base):
     __tablename__ = "organizations"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     category = Column(String)
@@ -24,6 +26,7 @@ class Organization(Base):
 
 class Branch(Base):
     __tablename__ = "branches"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"))
     name = Column(String)
@@ -32,6 +35,7 @@ class Branch(Base):
 
 class QueueSlot(Base):
     __tablename__ = "queue_slots"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id"))
     user_id = Column(Integer, ForeignKey("users.id"))

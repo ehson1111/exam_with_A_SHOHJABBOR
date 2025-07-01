@@ -45,10 +45,13 @@ class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
 class QueueSlotBase(BaseModel):
     branch_id: int
     user_id: int
-    date: datetime  # Changed to datetime to match SQLAlchemy model
+    date: datetime
     time: str
     status: str
 

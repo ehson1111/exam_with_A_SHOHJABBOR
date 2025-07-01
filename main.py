@@ -3,10 +3,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import Base, engine, get_db
 from models import User, Organization, Branch, QueueSlot as QueueSlotModel
-from schemas import UserCreate, UserResponse, Token, OrganizationResponse, PasswordResetConfirm, PasswordResetRequest, QueueSlot as QueueSlotSchema, Branch as BranchSchema
+from schemas import UserCreate, UserResponse, Token, OrganizationResponse, PasswordResetConfirm, PasswordResetRequest, QueueSlotCreate, QueueSlot as QueueSlotSchema, Branch as BranchSchema, VerifyEmailRequest
 from pydantic import BaseModel, EmailStr
-from auth import get_password_hash, verify_password, create_access_token, get_current_user, create_reset_token, verify_reset_token
+from auth import get_password_hash, verify_password, create_access_token, get_current_user, create_reset_token, verify_reset_token, create_verification_token, verify_verification_token, send_email
 from typing import List
+from datetime import datetime
 
 app = FastAPI()
 
@@ -23,13 +24,26 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db)):
         full_name=user.full_name,
         email=user.email, 
         password=hashed_password,
-        is_verified=False,
+        is_verified=False,  
         is_organization=False
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    verification_token = create_verification_token(data={"sub": user.email})
+    subject = "Verify Your Email"
+    body = f"Please use this token to verify your email: {verification_token}"
+    send_email(user.email, subject, body)
     return db_user
+
+@app.post("/verify-email/")
+async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
+    user = await verify_verification_token(request.token, db)
+    if user.is_verified:
+        return {"message": "Email already verified"}
+    user.is_verified = True
+    db.commit()
+    return {"message": "Email successfully verified"}
 
 @app.post("/token/", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -43,6 +57,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     if not user.is_verified:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email not verified")
     access_token = create_access_token(data={"sub": user.email})
+    subject = "Login Notification"
+    body = f"You logged in at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    send_email(user.email, subject, body)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me", response_model=UserResponse)
@@ -55,6 +72,9 @@ async def request_password_reset(request: PasswordResetRequest, db: Session = De
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     reset_token = create_reset_token(data={"sub": user.email})
+    subject = "Password Reset Request"
+    body = f"Use this token to reset your password: {reset_token}"
+    send_email(user.email, subject, body)
     return {"reset_token": reset_token, "message": "Password reset token sent to email"}
 
 @app.post("/password-reset/confirm/")
@@ -64,7 +84,7 @@ async def confirm_password_reset(request: PasswordResetConfirm, db: Session = De
     db.commit()
     return {"message": "Password successfully reset"}
 
-@app.post("/create-organization/")
+@app.post("/organizations/", response_model=OrganizationResponse)
 async def create_organization(name: str, category: str, description: str, address: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not current_user.is_organization:
         raise HTTPException(status_code=403, detail="User is not an organization")
@@ -81,7 +101,7 @@ async def create_organization(name: str, category: str, description: str, addres
     db.refresh(organization)
     return organization
 
-@app.post("/create-branch/")
+@app.post("/branches/", response_model=BranchSchema)
 async def create_branch(name: str, address: str, schedule: dict, organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not current_user.is_organization:
         raise HTTPException(status_code=403, detail="User is not an organization")
@@ -101,21 +121,28 @@ async def create_branch(name: str, address: str, schedule: dict, organization_id
     db.refresh(branch)
     return branch
 
-@app.post("/create-queue-slot/")
-async def create_queue_slot(branch_id: int, user_id: int, date: str, time: str, status: str, db: Session = Depends(get_db)):
+@app.post("/queue-slots/", response_model=QueueSlotSchema)
+async def create_queue_slot(queue_slot_data: QueueSlotCreate, db: Session = Depends(get_db)):
+    branch = db.query(Branch).filter(Branch.id == queue_slot_data.branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    user = db.query(User).filter(User.id == queue_slot_data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     queue_slot = QueueSlotModel(
-        branch_id=branch_id,
-        user_id=user_id,
-        date=date,
-        time=time,
-        status=status
+        branch_id=queue_slot_data.branch_id,
+        user_id=queue_slot_data.user_id,
+        date=queue_slot_data.date,
+        time=queue_slot_data.time,
+        status=queue_slot_data.status
     )
     db.add(queue_slot)
     db.commit()
     db.refresh(queue_slot)
     return queue_slot
 
-@app.get("/queue_slots", response_model=List[QueueSlotSchema])
+@app.get("/queue-slots/", response_model=List[QueueSlotSchema])
 async def get_queue_slots(db: Session = Depends(get_db)):
     queue_slots = db.query(QueueSlotModel).all()
     return queue_slots
@@ -149,7 +176,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.patch("/quick-queue-slot/{slot_id}/")
+@app.patch("/queue-slots/{slot_id}/", response_model=QueueSlotSchema)
 async def update_queue_slot(slot_id: int, status: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     queue_slot = db.query(QueueSlotModel).filter(QueueSlotModel.id == slot_id, QueueSlotModel.user_id == current_user.id).first()
     if not queue_slot:
@@ -160,7 +187,7 @@ async def update_queue_slot(slot_id: int, status: str, db: Session = Depends(get
     db.refresh(queue_slot)
     return queue_slot
 
-@app.patch("/quick-branch/{branch_id}/")
+@app.patch("/branches/{branch_id}/", response_model=BranchSchema)
 async def update_branch(branch_id: int, name: str, address: str, schedule: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     branch = db.query(Branch).filter(Branch.id == branch_id, Branch.organization_id == current_user.id).first()
     if not branch:
@@ -173,7 +200,7 @@ async def update_branch(branch_id: int, name: str, address: str, schedule: dict,
     db.refresh(branch)
     return branch
 
-@app.patch("/quick-organization/{organization_id}/")
+@app.patch("/organizations/{organization_id}/", response_model=OrganizationResponse)
 async def update_organization(organization_id: int, name: str, category: str, description: str, address: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     organization = db.query(Organization).filter(Organization.id == organization_id, Organization.owner_id == current_user.id).first()
     if not organization:
@@ -187,7 +214,7 @@ async def update_organization(organization_id: int, name: str, category: str, de
     db.refresh(organization)
     return organization
 
-@app.delete("/quick-queue-slot/{slot_id}/")
+@app.delete("/queue-slots/{slot_id}/")
 async def delete_queue_slot(slot_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     queue_slot = db.query(QueueSlotModel).filter(QueueSlotModel.id == slot_id, QueueSlotModel.user_id == current_user.id).first()
     if not queue_slot:
@@ -197,7 +224,7 @@ async def delete_queue_slot(slot_id: int, db: Session = Depends(get_db), current
     db.commit()
     return {"message": "Queue slot deleted successfully"}
 
-@app.delete("/quick-branch/{branch_id}/")
+@app.delete("/branches/{branch_id}/")
 async def delete_branch(branch_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     branch = db.query(Branch).filter(Branch.id == branch_id, Branch.organization_id == current_user.id).first()
     if not branch:
@@ -207,7 +234,7 @@ async def delete_branch(branch_id: int, db: Session = Depends(get_db), current_u
     db.commit()
     return {"message": "Branch deleted successfully"}
 
-@app.delete("/quick-organization/{organization_id}/")
+@app.delete("/organizations/{organization_id}/")
 async def delete_organization(organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     organization = db.query(Organization).filter(Organization.id == organization_id, Organization.owner_id == current_user.id).first()
     if not organization:
